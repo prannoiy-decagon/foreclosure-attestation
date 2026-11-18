@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Foreclosure Attestation — System Walkthrough</title>
+<style>
+  :root{
+    --bg:#2A2E33; --bar:#15181B; --ink:#DADBD8;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size:14px;
+  }
+
+  /* outer chrome: represents the agent's "browser window" */
+  .browser-chrome{ max-width:980px; margin:28px auto; border-radius:8px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.4); }
+  .chrome-bar{
+    background:var(--bar); padding:9px 14px; display:flex; align-items:center; gap:10px;
+  }
+  .chrome-dots{ display:flex; gap:6px; }
+  .chrome-dots span{ width:10px; height:10px; border-radius:50%; background:#444; }
+
+  .screen{ min-height:560px; background:#fff; color:#111; position:relative; }
+  .screen-inner{ display:none; min-height:560px; }
+  .screen-inner.active{ display:block; }
+
+  /* ---- step bar ---- */
+  .stepbar{
+    background:var(--bar); color:#9AA0A6; font-size:11.5px; padding:8px 16px;
+    display:flex; gap:14px; align-items:center;
+  }
+  .stepbar .step{ opacity:0.4; }
+  .stepbar .step.current{ opacity:1; color:#E8E6DE; font-weight:600; }
+  .stepbar .sep{ opacity:0.3; }
+
+  /* =========================================================
+     DOCUMENT (attorney draft) screen — neutral/paper
+  ========================================================== */
+  #doc-step{
+    padding:40px 60px; font-family: Georgia, serif; background:#F7F5F0;
+  }
+  #doc-step .doc-head{ font-size:12px; color:#8A8475; text-transform:uppercase; letter-spacing:1px; margin-bottom:18px; }
+  #doc-step .doc-title{ text-align:center; font-weight:700; margin-bottom:22px; font-size:15px; }
+  #doc-step .doc-body{ font-size:14px; line-height:1.9; color:#2A2620; max-width:620px; margin:0 auto; }
+  #doc-step .fld{ background:#EDE6D6; padding:0 3px; border-radius:2px; }
+
+  /* =========================================================
+     MSP THEME — legacy servicing platform (steel blue / windows-classic)
+  ========================================================== */
+  .msp{ background:#D4D0C8; font-family: Tahoma, Verdana, sans-serif; min-height:560px; }
+  .msp .titlebar{
+    background: linear-gradient(#0A3D6E, #0C2A4A);
+    color:#fff; padding:7px 14px; font-size:13px; font-weight:bold;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .msp .titlebar .sys{ letter-spacing:0.3px; }
+  .msp .titlebar .ver{ font-size:10px; font-weight:normal; color:#B9CBE0; }
+  .msp .toolbar{
+    background:#C3BEB2; padding:6px 14px; font-size:11px; color:#444;
+    border-bottom:1px solid #9C9688; display:flex; gap:16px;
+  }
+  .msp .content{ padding:26px 30px; }
+  .msp .panel-box{
+    background:#fff; border:1px solid #9C9688; box-shadow: inset 0 0 0 1px #fff;
+    padding:22px 26px; max-width:460px; margin:0 auto;
+  }
+  .msp .panel-box.wide{ max-width:640px; }
+  .msp label{ display:block; font-size:11.5px; color:#333; margin-bottom:3px; margin-top:12px; }
+  .msp input[type=text], .msp input[type=password]{
+    width:100%; padding:6px 8px; border:1px solid #8C8676; font-size:12.5px; background:#FFFFF0;
+    font-family: Tahoma, Verdana, sans-serif; color:#1A1A1A;
+  }
+  .msp .btn{
+    background: linear-gradient(#E8E6E0,#C9C5B8); border:1px solid #8C8676; border-radius:2px;
+    padding:7px 18px; font-size:12px; font-weight:bold; color:#1A1A1A; cursor:pointer; margin-top:16px;
+  }
+  .msp .btn:hover{ background: linear-gradient(#F0EEE8,#D4D0C4); }
+  .msp .btn.primary{ background: linear-gradient(#2E6DA4,#1C4F7D); color:#fff; border-color:#133A5C; }
+  .msp .btn.primary:hover{ background: linear-gradient(#3A7BB2,#245A8C); }
+  .msp .field-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .msp .field-table td{ padding:7px 10px; border-bottom:1px solid #E2DFD6; }
+  .msp .field-table td.lbl{ color:#555; width:38%; font-weight:bold; background:#ECEAE3; }
+  .msp .field-table tr.hl td{ background:#FFF6D9; }
+  .msp .record-head{ font-size:13px; font-weight:bold; margin-bottom:4px; color:#0C2A4A; }
+  .msp .record-sub{ font-size:11px; color:#777; margin-bottom:16px; }
+  .msp .status-pill{ display:inline-block; background:#C0392B; color:#fff; font-size:10.5px; padding:2px 8px; border-radius:2px; font-weight:bold; }
+
+  /* =========================================================
+     LSS THEME — imaging / document management system
+  ========================================================== */
+  .lss{ background:#EFE9DD; font-family: "Segoe UI", Tahoma, sans-serif; min-height:560px; }
+  .lss .titlebar{
+    background:#3E4A3F; color:#F3EFE3; padding:8px 14px; font-size:13px; font-weight:600;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .lss .titlebar .ver{ font-size:10px; color:#C7D1C8; font-weight:400; }
+  .lss .toolbar{
+    background:#DCD5C4; padding:6px 14px; font-size:11px; color:#4A4536;
+    border-bottom:1px solid #BFB89F; display:flex; gap:16px;
+  }
+  .lss .content{ padding:26px 30px; }
+  .lss .panel-box{
+    background:#FDFBF5; border:1px solid #BFB89F; padding:22px 26px; max-width:460px; margin:0 auto;
+  }
+  .lss .panel-box.wide{ max-width:660px; }
+  .lss label{ display:block; font-size:11.5px; color:#4A4536; margin-bottom:3px; margin-top:12px; }
+  .lss input[type=text], .lss input[type=password]{
+    width:100%; padding:6px 8px; border:1px solid #B6AE92; font-size:12.5px; background:#fff; color:#2A2620;
+  }
+  .lss .btn{
+    background:#4A5A4C; color:#fff; border:none; border-radius:3px;
+    padding:8px 18px; font-size:12px; font-weight:600; cursor:pointer; margin-top:16px;
+  }
+  .lss .btn:hover{ background:#5A6C5C; }
+  .lss .doc-list{ list-style:none; margin:0; padding:0; }
+  .lss .doc-list li{
+    display:flex; gap:12px; align-items:center; padding:11px 8px; border-bottom:1px solid #E3DDC9;
+  }
+  .lss .doc-thumb{
+    width:34px; height:44px; background:#fff; border:1px solid #C7C0A6; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:9px; color:#998F6F;
+  }
+  .lss .doc-meta{ flex:1; }
+  .lss .doc-type{ font-size:12.5px; font-weight:600; color:#333; }
+  .lss .doc-date{ font-size:11px; color:#8A8268; }
+  .lss .record-head{ font-size:13px; font-weight:bold; margin-bottom:4px; color:#3E4A3F; }
+  .lss .record-sub{ font-size:11px; color:#8A8268; margin-bottom:14px; }
+
+  /* =========================================================
+     CROSS-REFERENCE (final) screen
+  ========================================================== */
+  #xref-step{ padding:32px 40px; background:#fff; font-family: -apple-system, sans-serif; }
+  #xref-step h2{ font-size:16px; margin:0 0 4px; font-family: Georgia, serif; }
+  #xref-step .sub{ color:#777; font-size:12.5px; margin-bottom:18px; }
+  table.xref{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.xref th{ text-align:left; color:#888; font-size:11.5px; font-weight:600; padding:7px 10px; border-bottom:1px solid #ddd; }
+  table.xref td{ padding:9px 10px; border-bottom:1px solid #eee; }
+  table.xref tr.ok td:first-child{ border-left:3px solid #2E6B4F; }
+  table.xref tr.bad td{ background:#FBEDE3; }
+  table.xref tr.bad td:first-child{ border-left:3px solid #D98B4A; }
+  .src-tag{ font-size:10.5px; color:#999; display:block; }
+  .xref-icon{ font-weight:700; }
+  .xref-icon.ok{ color:#2E6B4F; } .xref-icon.bad{ color:#B3551F; }
+
+  /* ---- nav controls (outside the "browser") ---- */
+  .nav-row{ max-width:980px; margin:14px auto 40px; display:flex; justify-content:space-between; align-items:center; padding:0 4px; }
+  .nav-row .hint{ font-size:12px; color:#8C9299; }
+  .nav-row .btn-next{
+    background:#E8894A; color:#1A1A1A; border:none; border-radius:5px; padding:9px 20px;
+    font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .nav-row .btn-next:hover{ background:#F09B5E; }
+  .nav-row .btn-back{
+    background:none; color:#8C9299; border:1px solid #3A3F45; border-radius:5px; padding:9px 16px;
+    font-size:13px; cursor:pointer;
+  }
+  .nav-row .btn-back:hover{ color:#DADBD8; border-color:#5A6068; }
+  .nav-row .btn-back[disabled]{ opacity:0.3; cursor:default; }
+</style>
+</head>
+<body>
+
+<div class="browser-chrome">
+  <div class="chrome-bar">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="stepbar" id="stepbar"><!-- populated by JS --></div>
+
+  <div class="screen">
+
+    <!-- 0: Attorney document -->
+    <div class="screen-inner active" id="step-0">
+      <div id="doc-step">
+        <div class="doc-head">Intake &mdash; Attorney drafted document</div>
+        <div class="doc-title">COMPLAINT FOR FORECLOSURE &mdash; THOMPSON &amp; HALE LLP</div>
+        <div class="doc-body">
+          Plaintiff, PNC Bank, N.A., by and through counsel, files this Complaint for Foreclosure against
+          Defendant <span class="fld">Marcus Webb</span>, residing at
+          <span class="fld">4417 Birchwood Lane, Allegheny County, PA</span>.
+          The loan, originated on record, is currently past due in the amount of
+          <span class="fld">$184,520.00</span>, with default having occurred on
+          <span class="fld">June 3, 2026</span>. A Notice of Intent to Foreclose was served on
+          <span class="fld">July 9, 2026</span>, in accordance with applicable law.
+        </div>
+      </div>
+    </div>
+
+    <!-- 1: MSP login -->
+    <div class="screen-inner" id="step-1">
+      <div class="msp">
+        <div class="titlebar"><span class="sys">MSP &mdash; Mortgage Servicing Platform</span><span class="ver">v9.3</span></div>
+        <div class="toolbar"><span>File</span><span>Loan Search</span><span>Reports</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box">
+            <div class="record-head">Sign In</div>
+            <div class="record-sub">Authorized Users Only &mdash; All Activity Logged</div>
+            <label>User ID</label>
+            <input type="text" value="SVC-AGENT-004" readonly>
+            <label>Password</label>
+            <input type="password" value="••••••••••" readonly>
+            <button class="btn primary">Log In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2: MSP search -->
+    <div class="screen-inner" id="step-2">
+      <div class="msp">
+        <div class="titlebar"><span class="sys">MSP &mdash; Mortgage Servicing Platform</span><span class="ver">v9.3</span></div>
+        <div class="toolbar"><span>File</span><span>Loan Search</span><span>Reports</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box">
+            <div class="record-head">Loan Search</div>
+            <div class="record-sub">Search by loan number, SSN, or borrower name</div>
+            <label>Loan Number</label>
+            <input type="text" value="4487291">
+            <button class="btn primary">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3: MSP record -->
+    <div class="screen-inner" id="step-3">
+      <div class="msp">
+        <div class="titlebar"><span class="sys">MSP &mdash; Mortgage Servicing Platform</span><span class="ver">v9.3</span></div>
+        <div class="toolbar"><span>File</span><span>Loan Search</span><span>Reports</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box wide">
+            <div class="record-head">Loan #4487291 &nbsp; <span class="status-pill">DEFAULT</span></div>
+            <div class="record-sub">Record last updated 11/18/2026 06:40 AM</div>
+            <table class="field-table">
+              <tr><td class="lbl">Borrower Name</td><td>MARCUS WEBB</td></tr>
+              <tr><td class="lbl">Property Address</td><td>4417 BIRCHWOOD LN, ALLEGHENY COUNTY, PA</td></tr>
+              <tr class="hl"><td class="lbl">Past-Due Balance</td><td>$179,310.44</td></tr>
+              <tr><td class="lbl">Default Date</td><td>06/03/2026</td></tr>
+              <tr><td class="lbl">Original Principal</td><td>$212,900.00</td></tr>
+              <tr><td class="lbl">Escrow Balance</td><td>$1,204.18</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4: LSS login -->
+    <div class="screen-inner" id="step-4">
+      <div class="lss">
+        <div class="titlebar"><span>LSS &mdash; Loan Support &amp; Imaging System</span><span class="ver">Build 2026.4</span></div>
+        <div class="toolbar"><span>Documents</span><span>Search</span><span>Queues</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box">
+            <div class="record-head">Sign In</div>
+            <div class="record-sub">PNC Internal Use Only</div>
+            <label>User ID</label>
+            <input type="text" value="SVC-AGENT-004" readonly>
+            <label>Password</label>
+            <input type="password" value="••••••••••" readonly>
+            <button class="btn">Log In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5: LSS search -->
+    <div class="screen-inner" id="step-5">
+      <div class="lss">
+        <div class="titlebar"><span>LSS &mdash; Loan Support &amp; Imaging System</span><span class="ver">Build 2026.4</span></div>
+        <div class="toolbar"><span>Documents</span><span>Search</span><span>Queues</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box">
+            <div class="record-head">Document Search</div>
+            <div class="record-sub">Search imaged documents by loan number</div>
+            <label>Loan Number</label>
+            <input type="text" value="4487291">
+            <button class="btn">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6: LSS docs -->
+    <div class="screen-inner" id="step-6">
+      <div class="lss">
+        <div class="titlebar"><span>LSS &mdash; Loan Support &amp; Imaging System</span><span class="ver">Build 2026.4</span></div>
+        <div class="toolbar"><span>Documents</span><span>Search</span><span>Queues</span><span>Help</span></div>
+        <div class="content">
+          <div class="panel-box wide">
+            <div class="record-head">Loan #4487291 &mdash; Document History</div>
+            <div class="record-sub">6 documents on file</div>
+            <ul class="doc-list">
+              <li>
+                <div class="doc-thumb">PDF</div>
+                <div class="doc-meta">
+                  <div class="doc-type">Breach Letter</div>
+                  <div class="doc-date">Sent 06/10/2026</div>
+                </div>
+              </li>
+              <li>
+                <div class="doc-thumb">PDF</div>
+                <div class="doc-meta">
+                  <div class="doc-type">Notice of Intent to Foreclose</div>
+                  <div class="doc-date">Served 07/02/2026</div>
+                </div>
+              </li>
+              <li>
+                <div class="doc-thumb">PDF</div>
+                <div class="doc-meta">
+                  <div class="doc-type">Payment History Statement</div>
+                  <div class="doc-date">Generated 11/01/2026</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7: Cross-reference -->
+    <div class="screen-inner" id="step-7">
+      <div id="xref-step">
+        <h2>Cross-Reference Result</h2>
+        <div class="sub">Attorney document vs. MSP &amp; LSS — Loan #4487291</div>
+        <table class="xref">
+          <thead><tr><th>Field</th><th>Attorney Document</th><th>System of Record</th><th></th></tr></thead>
+          <tbody>
+            <tr class="ok"><td>Borrower name</td><td>Marcus Webb</td><td>Marcus Webb <span class="src-tag">MSP record</span></td><td class="xref-icon ok">&#10003;</td></tr>
+            <tr class="ok"><td>Property address</td><td>4417 Birchwood Lane</td><td>4417 Birchwood Ln <span class="src-tag">MSP record</span></td><td class="xref-icon ok">&#10003;</td></tr>
+            <tr class="bad"><td>Past-due balance</td><td>$184,520.00</td><td>$179,310.44 <span class="src-tag">MSP record</span></td><td class="xref-icon bad">&#33;</td></tr>
+            <tr class="ok"><td>Default date</td><td>June 3, 2026</td><td>06/03/2026 <span class="src-tag">MSP record</span></td><td class="xref-icon ok">&#10003;</td></tr>
+            <tr class="bad"><td>Notice served date</td><td>July 9, 2026</td><td>07/02/2026 <span class="src-tag">LSS document history</span></td><td class="xref-icon bad">&#33;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="nav-row">
+  <button class="btn-back" id="btn-back" onclick="go(-1)" disabled>&larr; Back</button>
+  <span class="hint" id="hint"></span>
+  <button class="btn-next" id="btn-next" onclick="go(1)">Next: Go to MSP</button>
+</div>
+
+<script>
+const steps = [
+  { label: "Attorney Document", url: "mail.internal.pnc.com/intake/fc-20481", next: "Next: Go to MSP" },
+  { label: "MSP Login",         url: "msp.internal.pnc.com/login", next: "Log In" },
+  { label: "MSP Search",        url: "msp.internal.pnc.com/search", next: "Search" },
+  { label: "MSP Record",        url: "msp.internal.pnc.com/loans/4487291/record", next: "Next: Go to LSS" },
+  { label: "LSS Login",         url: "lss.internal.pnc.com/login", next: "Log In" },
+  { label: "LSS Search",        url: "lss.internal.pnc.com/search", next: "Search" },
+  { label: "LSS Document History", url: "lss.internal.pnc.com/loans/4487291/documents", next: "Next: Cross-Reference" },
+  { label: "Cross-Reference",   url: "internal-tool.pnc.com/compare/fc-20481", next: "Done" }
+];
+
+let current = 0;
+
+function renderStepbar(){
+  const bar = document.getElementById('stepbar');
+  bar.innerHTML = steps.map((s, i) =>
+    '<span class="step' + (i === current ? ' current' : '') + '">' + s.label + '</span>' +
+    (i < steps.length - 1 ? '<span class="sep">›</span>' : '')
+  ).join('');
+}
+
+function render(){
+  document.querySelectorAll('.screen-inner').forEach(el => el.classList.remove('active'));
+  document.getElementById('step-' + current).classList.add('active');
+  document.getElementById('btn-next').textContent = steps[current].next;
+  document.getElementById('btn-back').disabled = (current === 0);
+  document.getElementById('btn-next').style.visibility = (current === steps.length - 1) ? 'hidden' : 'visible';
+  document.getElementById('hint').textContent = 'Step ' + (current + 1) + ' of ' + steps.length;
+  renderStepbar();
+}
+
+function go(dir){
+  const next = current + dir;
+  if(next < 0 || next >= steps.length) return;
+  current = next;
+  render();
+}
+
+render();
+</script>
+
+</body>
+</html>
